@@ -1,22 +1,29 @@
 package main
 
 import (
-	"bufio"
+	"context"
 	"fmt"
-	"golang.org/x/net/html/charset"
-	"golang.org/x/text/encoding"
-	"golang.org/x/text/encoding/unicode"
-	"golang.org/x/text/transform"
-	"io/ioutil"
-	"net/http"
+	"github.com/theone-daxia/crawler/collect"
+	"log"
 	"regexp"
+	"time"
+
+	"github.com/chromedp/chromedp"
 )
 
 var titleRe = regexp.MustCompile(`<div class="small_toplink__GmZhY"[\s\S]*?<h2>([\s\S]*?)</h2>`)
 
 func main() {
+	//getFromPP() // 获取澎湃新闻 card title
+	//getFromDB() // 获取豆瓣图书信息
+	getByChromedp() // 利用
+}
+
+func getFromPP() {
 	url := "https://www.thepaper.cn/channel_108856"
-	body, err := Fetch(url)
+	var f collect.Fetcher = &collect.BaseFetch{}
+
+	body, err := f.Get(url)
 	if err != nil {
 		fmt.Printf("read content failed:%v", err)
 		return
@@ -28,30 +35,38 @@ func main() {
 	}
 }
 
-func Fetch(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+func getFromDB() {
+	url := "https://book.douban.com/subject/1007305/"
+	var f collect.Fetcher = &collect.BrowserFetch{}
+
+	body, err := f.Get(url)
 	if err != nil {
-		panic(err)
+		fmt.Printf("read content failed:%v", err)
+		return
 	}
 
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("error status code:%v\n", resp.StatusCode)
-	}
-
-	bodyReader := bufio.NewReader(resp.Body)
-	e := DetermineEncoding(bodyReader)
-	utf8Reader := transform.NewReader(bodyReader, e.NewDecoder())
-	return ioutil.ReadAll(utf8Reader)
+	fmt.Println(string(body))
 }
 
-func DetermineEncoding(r *bufio.Reader) encoding.Encoding {
-	bytes, err := r.Peek(1024)
+func getByChromedp() {
+	// 1. 创建谷歌浏览器实例
+	ctx, cancel := chromedp.NewContext(context.Background())
+	defer cancel()
+
+	// 2. 设置 context 超时时间
+	ctx, cancel = context.WithTimeout(ctx, time.Second*15)
+	defer cancel()
+
+	// 3. 爬取页面，等待某一个元素出现，接着模拟鼠标点击，最后获取数据
+	var example string
+	err := chromedp.Run(ctx,
+		chromedp.Navigate(`https://pkg.go.dev/time`),
+		chromedp.WaitVisible(`body > footer`),
+		chromedp.Click(`#example-After`, chromedp.NodeVisible),
+		chromedp.Value(`#example-After textarea`, &example),
+	)
 	if err != nil {
-		fmt.Printf("fetch error%v\n", err)
-		return unicode.UTF8
+		log.Fatal(err)
 	}
-	e, _, _ := charset.DetermineEncoding(bytes, "")
-	return e
+	log.Printf("Go's time.After example:\n%s", example)
 }
